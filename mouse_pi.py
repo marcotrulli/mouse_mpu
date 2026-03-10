@@ -15,11 +15,12 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((PC_IP, PORT))
 
 # --- Parametri filtro e sensibilità ---
-ALPHA = 0.98
+ALPHA = 0.95  # più stabile, meno drifting
 SENS = 131.0
 dt = 0.01
 angle_x = 0
 angle_y = 0
+DEADZONE = 0.3  # zona morta per evitare piccoli drift
 
 # --- Lettura sensore ---
 def read_mpu():
@@ -41,19 +42,46 @@ def read_mpu():
 
     return ax, ay, az, gx, gy, gz
 
+# --- Calibrazione gyro a riposo ---
+def calibrate_gyro(samples=100):
+    gx_offset = gy_offset = gz_offset = 0
+    print("Calibrazione MPU a riposo... tieni fermo il sensore")
+    for _ in range(samples):
+        _, _, _, gx, gy, gz = read_mpu()
+        gx_offset += gx
+        gy_offset += gy
+        gz_offset += gz
+        time.sleep(0.01)
+    gx_offset /= samples
+    gy_offset /= samples
+    gz_offset /= samples
+    print(f"Offset calcolati: gx={gx_offset:.2f}, gy={gy_offset:.2f}, gz={gz_offset:.2f}")
+    return gx_offset, gy_offset, gz_offset
+
+gx_offset, gy_offset, gz_offset = calibrate_gyro()
+
 # --- Calcolo movimento mouse ---
 def calc_mouse(ax, ay, az, gx, gy, gz):
     global angle_x, angle_y
     pitch = math.atan2(-ax, math.sqrt(ay*ay + az*az))
     roll  = math.atan2(ay, az)
 
-    # Filtro complementare
-    angle_x = ALPHA*(angle_x + gx/SENS*dt) + (1-ALPHA)*math.degrees(pitch)
-    angle_y = ALPHA*(angle_y + gy/SENS*dt) + (1-ALPHA)*math.degrees(roll)
+    # Filtro complementare con offset
+    angle_x = ALPHA*(angle_x + (gx - gx_offset)/SENS*dt) + (1-ALPHA)*math.degrees(pitch)
+    angle_y = ALPHA*(angle_y + (gy - gy_offset)/SENS*dt) + (1-ALPHA)*math.degrees(roll)
 
     # Movimento mouse proporzionale e limitato
-    dx = max(min(angle_y*0.5, 20), -20)
-    dy = max(min(angle_x*0.5, 20), -20)
+    dx = angle_y * 0.5
+    dy = angle_x * 0.5
+
+    # Applica deadzone per evitare drift
+    if abs(dx) < DEADZONE: dx = 0
+    if abs(dy) < DEADZONE: dy = 0
+
+    # Limite massimo movimento
+    dx = max(min(dx, 20), -20)
+    dy = max(min(dy, 20), -20)
+
     return dx, dy
 
 # --- Loop principale ---

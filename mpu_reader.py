@@ -6,9 +6,9 @@ class MPUReader:
     def __init__(self, address=0x68, alpha=0.96, dt=0.01, filter_strength=0.1,
                  calib_samples=100, deadzone=0.0, max_delta=100.0):
         self.sensor = mpu6050(address)
-        self.alpha = alpha                # Filtro complementare
-        self.dt = dt                      # Intervallo di campionamento
-        self.filter_strength = filter_strength  # Forza filtro passa-basso
+        self.alpha = alpha
+        self.dt = dt
+        self.filter_strength = filter_strength
         self.deadzone = deadzone
         self.max_delta = max_delta
 
@@ -49,7 +49,7 @@ class MPUReader:
         self.angle_x = self.alpha * (self.angle_x + gx * self.dt) + (1 - self.alpha) * pitch
         self.angle_y = self.alpha * (self.angle_y + gy * self.dt) + (1 - self.alpha) * roll
 
-        # Passa-basso leggero per stabilizzare
+        # Passa-basso leggero
         self.angle_x = self.angle_x * (1 - self.filter_strength) + pitch * self.filter_strength
         self.angle_y = self.angle_y * (1 - self.filter_strength) + roll * self.filter_strength
 
@@ -64,3 +64,18 @@ class MPUReader:
         self.angle_y = max(min(self.angle_y, self.max_delta), -self.max_delta)
 
         return self.angle_x, self.angle_y
+
+    def read_filtered(self, dt=None, samples=1):
+        """
+        Funzione compatibile con mouse_pi.py.
+        Se samples>1, fa una media su più letture.
+        """
+        total_x = 0.0
+        total_y = 0.0
+        for _ in range(samples):
+            x, y = self.read_angles()
+            total_x += x
+            total_y += y
+            if dt:
+                time.sleep(dt)
+        return total_x / samples, total_y / samples

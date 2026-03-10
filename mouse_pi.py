@@ -59,8 +59,8 @@ while True:
     gx -= offset_x
     gy -= offset_y
 
-    dx = int(gy / 200)    #  /a con più a è piccolo più la sensibilità del mouse è bassa 
-    dy = int(gx / 200)
+    dx = int(gy / 1000)    #  /a con più a è grande più la sensibilità del mouse è bassa 
+    dy = int(gx / 1000)
 
     packet = struct.pack("bb", dx, dy)
 

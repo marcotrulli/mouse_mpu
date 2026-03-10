@@ -17,8 +17,8 @@ sock.connect((PC_IP, PORT))
 # --- Parametri filtro e sensibilità ---
 ALPHA = 0.95
 SENS = 131.0
-DEADZONE = 0.3
-FPS = 100             # aggiornamenti al secondo
+DEADZONE = 0.1       # più piccolo = più sensibile
+FPS = 200             # aggiornamenti al secondo
 FRAME_TIME = 1 / FPS
 angle_x = 0
 angle_y = 0
@@ -75,7 +75,7 @@ def calc_mouse(ax, ay, az, gx, gy, gz):
     dx = angle_y * 0.5
     dy = angle_x * 0.5
 
-    # Applica deadzone
+    # Deadzone per ridurre drift
     if abs(dx) < DEADZONE: dx = 0
     if abs(dy) < DEADZONE: dy = 0
 
@@ -94,7 +94,4 @@ while True:
         ax, ay, az, gx, gy, gz = read_mpu()
         dx, dy = calc_mouse(ax, ay, az, gx, gy, gz)
         msg = f"{dx:.2f},{dy:.2f}\n"
-        try:
-            sock.sendall(msg.encode())
-        except:
-            pass
+        sock.sendall(msg.encode())

@@ -14,20 +14,23 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # wake up MPU6050
 bus.write_byte_data(MPU_ADDR, 0x6B, 0)
 
-print("Calibrazione...")
+print("Calibrazione MPU a riposo...")
 
 offset_x = 0
 offset_y = 0
 samples = 200
 
 for _ in range(samples):
+
     data = bus.read_i2c_block_data(MPU_ADDR, 0x43, 4)
 
     gx = (data[0] << 8) | data[1]
     gy = (data[2] << 8) | data[3]
 
-    if gx > 32767: gx -= 65536
-    if gy > 32767: gy -= 65536
+    if gx > 32767:
+        gx -= 65536
+    if gy > 32767:
+        gy -= 65536
 
     offset_x += gx
     offset_y += gy
@@ -37,9 +40,9 @@ for _ in range(samples):
 offset_x /= samples
 offset_y /= samples
 
-print("Offset:", offset_x, offset_y)
+print("Offset calcolati:", offset_x, offset_y)
 
-print("Invio dati...")
+print("Connessione al PC...")
 
 while True:
 
@@ -48,8 +51,10 @@ while True:
     gx = (data[0] << 8) | data[1]
     gy = (data[2] << 8) | data[3]
 
-    if gx > 32767: gx -= 65536
-    if gy > 32767: gy -= 65536
+    if gx > 32767:
+        gx -= 65536
+    if gy > 32767:
+        gy -= 65536
 
     gx -= offset_x
     gy -= offset_y

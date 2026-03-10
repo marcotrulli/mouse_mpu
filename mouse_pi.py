@@ -9,11 +9,11 @@ PORT = 5005
 
 bus = smbus.SMBus(1)
 
-# sensibilità: più grande ? mouse più lento
+# sensibilità: più grande → mouse più lento
 SENS = 4000  
 
 # soglia minima per eliminare micro-movimenti involontari
-THRESH = 0.1  
+THRESH = 0.05  
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -50,7 +50,22 @@ print("Connessione al PC...")
 acc_dx = 0.0
 acc_dy = 0.0
 
+# buffer media mobile per stabilizzare piccoli movimenti
+WINDOW = 5
+dx_buffer = [0.0] * WINDOW
+dy_buffer = [0.0] * WINDOW
+
+# filtro complementare semplice
+alpha = 0.98
+angle_x = 0.0
+angle_y = 0.0
+prev_time = time.time()
+
 while True:
+    current_time = time.time()
+    dt = current_time - prev_time
+    prev_time = current_time
+
     data = bus.read_i2c_block_data(MPU_ADDR, 0x43, 4)
 
     gx = (data[0] << 8) | data[1]
@@ -62,21 +77,32 @@ while True:
     gx -= offset_x
     gy -= offset_y
 
-    # calcolo movimento con sensibilità e correzione asse
-    dx_f = -gy / SENS  # segno invertito per direzione corretta
-    dy_f = -gx / SENS
+    # filtro complementare (solo gyro, accel opzionale se vuoi)
+    angle_x = alpha * (angle_x + gx * dt)
+    angle_y = alpha * (angle_y + gy * dt)
+
+    dx_f = -angle_y / SENS
+    dy_f = -angle_x / SENS
+
+    # aggiorna buffer media mobile
+    dx_buffer.append(dx_f)
+    dy_buffer.append(dy_f)
+    dx_buffer.pop(0)
+    dy_buffer.pop(0)
+
+    avg_dx = sum(dx_buffer) / WINDOW
+    avg_dy = sum(dy_buffer) / WINDOW
 
     # applica soglia minima
-    if abs(dx_f) < THRESH:
-        dx_f = 0
-    if abs(dy_f) < THRESH:
-        dy_f = 0
+    if abs(avg_dx) < THRESH:
+        avg_dx = 0
+    if abs(avg_dy) < THRESH:
+        avg_dy = 0
 
-    # accumulo dei delta
-    acc_dx += dx_f
-    acc_dy += dy_f
+    # accumulo per pixel
+    acc_dx += avg_dx
+    acc_dy += avg_dy
 
-    # invio solo quando accumulo almeno 1 pixel
     move_x = int(acc_dx)
     move_y = int(acc_dy)
 

@@ -9,8 +9,11 @@ PORT = 5005
 
 bus = smbus.SMBus(1)
 
-# sensibilità: più grande il numero, meno sensibile
+# sensibilità: più grande ? mouse più lento
 SENS = 4000  
+
+# soglia minima per eliminare micro-movimenti involontari
+THRESH = 0.1  
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -59,11 +62,17 @@ while True:
     gx -= offset_x
     gy -= offset_y
 
-    # calcolo movimento reale con sensibilità
-    dx_f = gy / SENS
-    dy_f = gx / SENS
+    # calcolo movimento con sensibilità e correzione asse
+    dx_f = -gy / SENS  # segno invertito per direzione corretta
+    dy_f = -gx / SENS
 
-    # accumulo i piccoli delta
+    # applica soglia minima
+    if abs(dx_f) < THRESH:
+        dx_f = 0
+    if abs(dy_f) < THRESH:
+        dy_f = 0
+
+    # accumulo dei delta
     acc_dx += dx_f
     acc_dy += dy_f
 

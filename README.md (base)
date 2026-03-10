@@ -1,7 +1,16 @@
-# Mouse MPU6050 via Bluetooth
+# Mouse MPU6050 via TCP
 
-Repo pronta per Raspberry Pi 3 + MPU6050 che invia dati via Bluetooth a PC.
+Sistema Raspberry Pi + MPU6050 che muove il mouse del PC via TCP.
 
-## Setup
+---
 
-1. Clonare la repo:
+## Setup Pi
+
+```bash
+git clone <repo>
+cd mouse_mpu_tcp
+python3 -m venv venv --system-site-packages
+source venv/bin/activate
+pip install --upgrade pip
+pip install mpu6050-raspberrypi
+python3 mouse_pi.py

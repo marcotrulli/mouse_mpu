@@ -1,2 +1,2 @@
-pybluez
+pybluez3
 mpu6050-raspberrypi

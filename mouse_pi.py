@@ -14,7 +14,7 @@ ALPHA = 0.96  # filtro complementare
 DT = 0.01     # loop time ~10ms
 
 # --- TCP ---
-PC_IP = '192.168.1.194'  # cambia con IP PC
+PC_IP = '192.168.1.179'  # METTI QUI IL TUO IP DEL PC
 PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((PC_IP, PORT))

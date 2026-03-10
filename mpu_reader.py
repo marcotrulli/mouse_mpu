@@ -1,65 +1,53 @@
-# mpu_reader.py
 from mpu6050 import mpu6050
 import math
+import time
 
 class MPUReader:
-    def __init__(self, address=0x68, alpha=0.9, deadzone=0.3, max_delta=15, samples=3):
+    def __init__(self, address=0x68, alpha=0.96, dt=0.01, filter_strength=0.1, calib_samples=100):
         self.sensor = mpu6050(address)
-        self.alpha = alpha            # peso gyro nel filtro complementare
+        self.alpha = alpha        # Filtro complementare
+        self.dt = dt              # Intervallo di campionamento
+        self.filter_strength = filter_strength  # Forza filtro passa-basso
+
         self.angle_x = 0.0
         self.angle_y = 0.0
-        self.deadzone = deadzone      # soglia minima per dx/dy
-        self.max_delta = max_delta    # delta massimo per stabilità
-        self.samples = samples        # media mobile su N campioni
 
-    def read_filtered(self, dt):
-        dx_sum, dy_sum = 0, 0
-        last_pitch, last_roll = 0, 0
+        # Offset giroscopio per compensare drift
+        self.gyro_offset_x = 0.0
+        self.gyro_offset_y = 0.0
+        self.calibrate_gyro(calib_samples)
 
-        for _ in range(self.samples):
-            accel = self.sensor.get_accel_data()
-            gyro  = self.sensor.get_gyro_data()
+    def calibrate_gyro(self, samples=100):
+        sum_x = 0.0
+        sum_y = 0.0
+        print("Calibrating gyro... keep MPU still")
+        for _ in range(samples):
+            gyro = self.sensor.get_gyro_data()
+            sum_x += gyro['x']
+            sum_y += gyro['y']
+            time.sleep(0.01)
+        self.gyro_offset_x = sum_x / samples
+        self.gyro_offset_y = sum_y / samples
+        print(f"Gyro offsets: x={self.gyro_offset_x:.3f}, y={self.gyro_offset_y:.3f}")
 
-            ax, ay, az = accel['x'], accel['y'], accel['z']
-            gx, gy, gz = gyro['x'], gyro['y'], gyro['z']
+    def read_angles(self):
+        accel = self.sensor.get_accel_data()
+        gyro = self.sensor.get_gyro_data()
 
-            # calcolo pitch e roll
-            pitch = math.atan2(ax, math.sqrt(ay*ay + az*az))
-            roll  = math.atan2(ay, math.sqrt(ax*ax + az*az))
+        # Calcolo pitch e roll dall'accelerometro
+        roll = math.atan2(accel['y'], accel['z']) * 180 / math.pi
+        pitch = math.atan2(-accel['x'], math.sqrt(accel['y']**2 + accel['z']**2)) * 180 / math.pi
 
-            # filtro complementare con gyro e accelerometro
-            self.angle_x = self.alpha * (self.angle_x + gx*dt) + (1 - self.alpha) * pitch
-            self.angle_y = self.alpha * (self.angle_y + gy*dt) + (1 - self.alpha) * roll
+        # Correzione giroscopio con offset
+        gx = gyro['x'] - self.gyro_offset_x
+        gy = gyro['y'] - self.gyro_offset_y
 
-            dx = self.angle_x * math.cos(pitch)
-            dy = self.angle_y * math.cos(roll)
+        # Filtro complementare
+        self.angle_x = self.alpha * (self.angle_x + gx * self.dt) + (1 - self.alpha) * pitch
+        self.angle_y = self.alpha * (self.angle_y + gy * self.dt) + (1 - self.alpha) * roll
 
-            dx_sum += dx
-            dy_sum += dy
+        # Passa-basso per stabilizzare
+        self.angle_x = self.angle_x * (1 - self.filter_strength) + pitch * self.filter_strength
+        self.angle_y = self.angle_y * (1 - self.filter_strength) + roll * self.filter_strength
 
-            last_pitch, last_roll = pitch, roll
-
-        # media mobile
-        dx = dx_sum / self.samples
-        dy = dy_sum / self.samples
-
-        # deadzone
-        if abs(dx) < self.deadzone: dx = 0
-        if abs(dy) < self.deadzone: dy = 0
-
-        # limiti massimo delta
-        dx = max(min(dx, self.max_delta), -self.max_delta)
-        dy = max(min(dy, self.max_delta), -self.max_delta)
-
-        return {
-            "dx": dx,
-            "dy": dy,
-            "pitch": last_pitch,
-            "roll": last_roll,
-            "gx": gx,
-            "gy": gy,
-            "gz": gz,
-            "ax": ax,
-            "ay": ay,
-            "az": az
-        }
+        return self.angle_x, self.angle_y

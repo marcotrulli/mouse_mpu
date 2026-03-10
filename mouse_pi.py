@@ -6,7 +6,7 @@ from mpu_reader import MPUReader
 # ===== CONFIGURAZIONE =====
 PC_IP = "192.168.1.179"  # Inserisci l'IP del PC
 PC_PORT = 5005            # Porta TCP del server sul PC
-SEND_INTERVAL = 0.05      # Frequenza di invio dati (20 Hz)
+SEND_INTERVAL = 0.001      # Frequenza di invio dati (20 Hz)
 
 # ===== INIZIALIZZAZIONE SENSORE =====
 sensor = MPUReader()  # Si calibra automaticamente a riposo

@@ -1,2 +1,3 @@
 bleak
 mpu6050-raspberrypi
+pynput

@@ -1,2 +1,2 @@
-pybluez3
+bleak
 mpu6050-raspberrypi

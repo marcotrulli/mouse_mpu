@@ -1,12 +1,6 @@
-import smbus
-import math
-import socket
 import time
-
-# --- MPU6050 Setup ---
-MPU_ADDR = 0x68
-bus = smbus.SMBus(1)
-bus.write_byte_data(MPU_ADDR, 0x6B, 0)  # wake up
+import socket
+from mpu_reader import MPUReader
 
 # --- TCP PC ---
 PC_IP = '192.168.1.179'
@@ -14,80 +8,38 @@ PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((PC_IP, PORT))
 
-# --- Parametri filtro ---
-ALPHA = 0.95
-SENS = 131.0
-DEADZONE = 0.2
+# --- Parametri ---
 FPS = 120
 FRAME_TIME = 1 / FPS
-angle_x = 0
-angle_y = 0
+SEND_THRESHOLD = 0.3  # invia dati solo se dx/dy > threshold
+SAMPLES_AVG = 3       # media su N campioni per ridurre jitter
 
-# --- Lettura sensore ---
-def read_mpu():
-    accel = bus.read_i2c_block_data(MPU_ADDR, 0x3B, 6)
-    ax = (accel[0] << 8 | accel[1])
-    ay = (accel[2] << 8 | accel[3])
-    az = (accel[4] << 8 | accel[5])
-    if ax > 32767: ax -= 65536
-    if ay > 32767: ay -= 65536
-    if az > 32767: az -= 65536
+# --- MPU setup ---
+mpu = MPUReader(alpha=0.95, deadzone=0.2, max_delta=15)
 
-    gyro = bus.read_i2c_block_data(MPU_ADDR, 0x43, 6)
-    gx = (gyro[0] << 8 | gyro[1])
-    gy = (gyro[2] << 8 | gyro[3])
-    gz = (gyro[4] << 8 | gyro[5])
-    if gx > 32767: gx -= 65536
-    if gy > 32767: gy -= 65536
-    if gz > 32767: gz -= 65536
-
-    return ax, ay, az, gx, gy, gz
-
-# --- Calibrazione gyro ---
-def calibrate_gyro(samples=100):
-    gx_offset = gy_offset = gz_offset = 0
-    print("Calibrazione MPU a riposo...")
-    for _ in range(samples):
-        _, _, _, gx, gy, gz = read_mpu()
-        gx_offset += gx
-        gy_offset += gy
-        gz_offset += gz
-        time.sleep(0.01)
-    gx_offset /= samples
-    gy_offset /= samples
-    gz_offset /= samples
-    print(f"Offset: gx={gx_offset:.2f}, gy={gy_offset:.2f}, gz={gz_offset:.2f}")
-    return gx_offset, gy_offset, gz_offset
-
-gx_offset, gy_offset, gz_offset = calibrate_gyro()
-
-# --- Calcolo movimento mouse ---
-def calc_mouse(ax, ay, az, gx, gy, gz):
-    global angle_x, angle_y
-    pitch = math.atan2(-ax, math.sqrt(ay*ay + az*az))
-    roll  = math.atan2(ay, az)
-
-    # Filtro complementare con correzione accelerometro
-    angle_x = ALPHA*(angle_x + (gx - gx_offset)/SENS*FRAME_TIME) + (1-ALPHA)*math.degrees(pitch)
-    angle_y = ALPHA*(angle_y + (gy - gy_offset)/SENS*FRAME_TIME) + (1-ALPHA)*math.degrees(roll)
-
-    # Movimento proporzionale e limitato
-    dx = max(min(angle_y * 0.5, 15), -15)
-    dy = max(min(angle_x * 0.5, 15), -15)
-
-    # Deadzone per piccoli movimenti
-    if abs(dx) < DEADZONE: dx = 0
-    if abs(dy) < DEADZONE: dy = 0
-
-    return dx, dy
-
-# --- Loop principale a FPS costante ---
+# --- Loop principale ---
 last_time = time.perf_counter()
+
 while True:
     now = time.perf_counter()
     if now - last_time >= FRAME_TIME:
         last_time = now
-        ax, ay, az, gx, gy, gz = read_mpu()
-        dx, dy = calc_mouse(ax, ay, az, gx, gy, gz)
-        msg = f"{dx:.2f},{dy:.2f}\n"
-        sock.sendall(msg.encode())
+
+        dx_sum = 0
+        dy_sum = 0
+        # media su più campioni
+        for _ in range(SAMPLES_AVG):
+            data = mpu.read_filtered(FRAME_TIME / SAMPLES_AVG)
+            dx_sum += data['dx']
+            dy_sum += data['dy']
+        
+        dx = dx_sum / SAMPLES_AVG
+        dy = dy_sum / SAMPLES_AVG
+
+        # invia solo se movimento significativo
+        if abs(dx) > SEND_THRESHOLD or abs(dy) > SEND_THRESHOLD:
+            msg = f"{dx:.2f},{dy:.2f}\n"
+            try:
+                sock.sendall(msg.encode())
+            except:
+                pass

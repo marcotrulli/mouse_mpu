@@ -9,16 +9,16 @@ bus = smbus.SMBus(1)
 bus.write_byte_data(MPU_ADDR, 0x6B, 0)  # wake up
 
 # --- TCP PC ---
-PC_IP = '192.168.1.179'  # sostituisci con IP del tuo PC
+PC_IP = '192.168.1.179'
 PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((PC_IP, PORT))
 
-# --- Parametri filtro e sensibilità ---
+# --- Parametri filtro ---
 ALPHA = 0.95
 SENS = 131.0
-DEADZONE = 0.1       # più piccolo = più sensibile
-FPS = 200             # aggiornamenti al secondo
+DEADZONE = 0.2
+FPS = 120
 FRAME_TIME = 1 / FPS
 angle_x = 0
 angle_y = 0
@@ -43,10 +43,10 @@ def read_mpu():
 
     return ax, ay, az, gx, gy, gz
 
-# --- Calibrazione gyro a riposo ---
+# --- Calibrazione gyro ---
 def calibrate_gyro(samples=100):
     gx_offset = gy_offset = gz_offset = 0
-    print("Calibrazione MPU a riposo... tieni fermo il sensore")
+    print("Calibrazione MPU a riposo...")
     for _ in range(samples):
         _, _, _, gx, gy, gz = read_mpu()
         gx_offset += gx
@@ -56,7 +56,7 @@ def calibrate_gyro(samples=100):
     gx_offset /= samples
     gy_offset /= samples
     gz_offset /= samples
-    print(f"Offset calcolati: gx={gx_offset:.2f}, gy={gy_offset:.2f}, gz={gz_offset:.2f}")
+    print(f"Offset: gx={gx_offset:.2f}, gy={gy_offset:.2f}, gz={gz_offset:.2f}")
     return gx_offset, gy_offset, gz_offset
 
 gx_offset, gy_offset, gz_offset = calibrate_gyro()
@@ -67,25 +67,21 @@ def calc_mouse(ax, ay, az, gx, gy, gz):
     pitch = math.atan2(-ax, math.sqrt(ay*ay + az*az))
     roll  = math.atan2(ay, az)
 
-    # Filtro complementare con offset
+    # Filtro complementare con correzione accelerometro
     angle_x = ALPHA*(angle_x + (gx - gx_offset)/SENS*FRAME_TIME) + (1-ALPHA)*math.degrees(pitch)
     angle_y = ALPHA*(angle_y + (gy - gy_offset)/SENS*FRAME_TIME) + (1-ALPHA)*math.degrees(roll)
 
-    # Movimento mouse proporzionale e limitato
-    dx = angle_y * 0.5
-    dy = angle_x * 0.5
+    # Movimento proporzionale e limitato
+    dx = max(min(angle_y * 0.5, 15), -15)
+    dy = max(min(angle_x * 0.5, 15), -15)
 
-    # Deadzone per ridurre drift
+    # Deadzone per piccoli movimenti
     if abs(dx) < DEADZONE: dx = 0
     if abs(dy) < DEADZONE: dy = 0
 
-    # Limite massimo movimento
-    dx = max(min(dx, 20), -20)
-    dy = max(min(dy, 20), -20)
-
     return dx, dy
 
-# --- Loop principale con FPS costante ---
+# --- Loop principale a FPS costante ---
 last_time = time.perf_counter()
 while True:
     now = time.perf_counter()

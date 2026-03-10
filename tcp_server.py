@@ -3,7 +3,7 @@ import socket
 from pynput.mouse import Controller
 
 PC_IP = "0.0.0.0"
-PORT  = 5005
+PORT = 5005
 
 mouse = Controller()
 
@@ -20,21 +20,22 @@ try:
         if not data:
             break
         try:
-            # dx, dy + gyro + accel
-            dx_str, dy_str, gx, gy, gz, ax, ay, az = data.decode().split(",")
+            # Riceve dx,dy + gyro X/Y/Z + accel X/Y/Z (8 valori)
+            dx_str, dy_str, gx_str, gy_str, gz_str, ax_str, ay_str, az_str = data.decode().split(",")
+
             dx = float(dx_str)
             dy = float(dy_str)
-            gx = float(gx)
-            gy = float(gy)
-            gz = float(gz)
-            ax = float(ax)
-            ay = float(ay)
-            az = float(az)
+            gx = float(gx_str)
+            gy = float(gy_str)
+            gz = float(gz_str)
+            ax = float(ax_str)
+            ay = float(ay_str)
+            az = float(az_str)
 
-            # Muove mouse
+            # Muove mouse relativamente
             mouse.move(dx, dy)
 
-            # Stampa valori per debug
+            # Stampa per debug valori X/Y/Z
             print(f"dx={dx:.2f}, dy={dy:.2f} | gx={gx:.2f}, gy={gy:.2f}, gz={gz:.2f} | ax={ax:.2f}, ay={ay:.2f}, az={az:.2f}")
 
         except Exception as e:

@@ -15,12 +15,13 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect((PC_IP, PORT))
 
 # --- Parametri filtro e sensibilità ---
-ALPHA = 0.95  # più stabile, meno drifting
+ALPHA = 0.95
 SENS = 131.0
-dt = 0.01
+DEADZONE = 0.3
+FPS = 100             # aggiornamenti al secondo
+FRAME_TIME = 1 / FPS
 angle_x = 0
 angle_y = 0
-DEADZONE = 0.3  # zona morta per evitare piccoli drift
 
 # --- Lettura sensore ---
 def read_mpu():
@@ -67,14 +68,14 @@ def calc_mouse(ax, ay, az, gx, gy, gz):
     roll  = math.atan2(ay, az)
 
     # Filtro complementare con offset
-    angle_x = ALPHA*(angle_x + (gx - gx_offset)/SENS*dt) + (1-ALPHA)*math.degrees(pitch)
-    angle_y = ALPHA*(angle_y + (gy - gy_offset)/SENS*dt) + (1-ALPHA)*math.degrees(roll)
+    angle_x = ALPHA*(angle_x + (gx - gx_offset)/SENS*FRAME_TIME) + (1-ALPHA)*math.degrees(pitch)
+    angle_y = ALPHA*(angle_y + (gy - gy_offset)/SENS*FRAME_TIME) + (1-ALPHA)*math.degrees(roll)
 
     # Movimento mouse proporzionale e limitato
     dx = angle_y * 0.5
     dy = angle_x * 0.5
 
-    # Applica deadzone per evitare drift
+    # Applica deadzone
     if abs(dx) < DEADZONE: dx = 0
     if abs(dy) < DEADZONE: dy = 0
 
@@ -84,13 +85,16 @@ def calc_mouse(ax, ay, az, gx, gy, gz):
 
     return dx, dy
 
-# --- Loop principale ---
+# --- Loop principale con FPS costante ---
+last_time = time.perf_counter()
 while True:
-    ax, ay, az, gx, gy, gz = read_mpu()
-    dx, dy = calc_mouse(ax, ay, az, gx, gy, gz)
-    msg = f"{dx:.2f},{dy:.2f}\n"
-    try:
-        sock.sendall(msg.encode())
-    except:
-        pass
-    time.sleep(dt)
+    now = time.perf_counter()
+    if now - last_time >= FRAME_TIME:
+        last_time = now
+        ax, ay, az, gx, gy, gz = read_mpu()
+        dx, dy = calc_mouse(ax, ay, az, gx, gy, gz)
+        msg = f"{dx:.2f},{dy:.2f}\n"
+        try:
+            sock.sendall(msg.encode())
+        except:
+            pass

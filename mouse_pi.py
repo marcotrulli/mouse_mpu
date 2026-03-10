@@ -10,7 +10,7 @@ PORT = 5005
 bus = smbus.SMBus(1)
 
 # sensibilità: più grande → mouse più lento
-SENS = 180
+SENS = 160
 
 
 # soglia minima per eliminare micro-movimenti involontari

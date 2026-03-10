@@ -1,0 +1,7 @@
+# Mouse MPU6050 via Bluetooth
+
+Repo pronta per Raspberry Pi 3 + MPU6050 che invia dati via Bluetooth a PC.
+
+## Setup
+
+1. Clonare la repo:

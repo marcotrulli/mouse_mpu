@@ -8,7 +8,7 @@ PC_IP = "192.168.1.179"
 PORT = 5005
 
 bus = smbus.SMBus(1)
-sens=3000
+sens=10000
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # wake up MPU6050

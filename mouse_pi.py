@@ -27,7 +27,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             data = sensor.read_filtered()
 
             # Prepara payload JSON compatibile con il server
-            payload = {"dx": data["dx"], "dy": data["dy"]}
+            payload = {"dx": data["dx"], "dy": -data["dy"]}
 
             # Invia al server TCP, aggiunge newline come separatore
             try:

@@ -1,7 +1,6 @@
 import socket
 from pynput.mouse import Controller
 
-# --- Setup mouse ---
 mouse = Controller()
 HOST = '0.0.0.0'
 PORT = 5005
@@ -23,7 +22,6 @@ while True:
         line, buffer = buffer.split("\n", 1)
         try:
             dx, dy = map(float, line.split(","))
-            # movimento diretto senza smoothing per massima velocità
-            mouse.move(dx, dy)
+            mouse.move(dx, dy)  # movimento diretto per massimo FPS
         except:
             print("Errore parsing dati:", line)

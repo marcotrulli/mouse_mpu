@@ -3,11 +3,14 @@ import math
 import time
 
 class MPUReader:
-    def __init__(self, address=0x68, alpha=0.96, dt=0.01, filter_strength=0.1, calib_samples=100):
+    def __init__(self, address=0x68, alpha=0.96, dt=0.01, filter_strength=0.1,
+                 calib_samples=100, deadzone=0.0, max_delta=100.0):
         self.sensor = mpu6050(address)
-        self.alpha = alpha        # Filtro complementare
-        self.dt = dt              # Intervallo di campionamento
+        self.alpha = alpha                # Filtro complementare
+        self.dt = dt                      # Intervallo di campionamento
         self.filter_strength = filter_strength  # Forza filtro passa-basso
+        self.deadzone = deadzone
+        self.max_delta = max_delta
 
         self.angle_x = 0.0
         self.angle_y = 0.0
@@ -46,8 +49,18 @@ class MPUReader:
         self.angle_x = self.alpha * (self.angle_x + gx * self.dt) + (1 - self.alpha) * pitch
         self.angle_y = self.alpha * (self.angle_y + gy * self.dt) + (1 - self.alpha) * roll
 
-        # Passa-basso per stabilizzare
+        # Passa-basso leggero per stabilizzare
         self.angle_x = self.angle_x * (1 - self.filter_strength) + pitch * self.filter_strength
         self.angle_y = self.angle_y * (1 - self.filter_strength) + roll * self.filter_strength
+
+        # Applicazione deadzone
+        if abs(self.angle_x) < self.deadzone:
+            self.angle_x = 0.0
+        if abs(self.angle_y) < self.deadzone:
+            self.angle_y = 0.0
+
+        # Limitazione delta massima
+        self.angle_x = max(min(self.angle_x, self.max_delta), -self.max_delta)
+        self.angle_y = max(min(self.angle_y, self.max_delta), -self.max_delta)
 
         return self.angle_x, self.angle_y

@@ -68,6 +68,7 @@ class MPUReader:
     def read_filtered(self, dt=None, samples=1):
         """
         Funzione compatibile con mouse_pi.py.
+        Restituisce un dizionario {'dx':..., 'dy':...}.
         Se samples>1, fa una media su più letture.
         """
         total_x = 0.0
@@ -78,4 +79,4 @@ class MPUReader:
             total_y += y
             if dt:
                 time.sleep(dt)
-        return total_x / samples, total_y / samples
+        return {'dx': total_x / samples, 'dy': total_y / samples}

@@ -1,7 +1,7 @@
 import asyncio
 import json
 from bleak import BleakScanner, BleakClient
-from utils.mpu_reader import MPUReader
+from mpu_reader import MPUReader
 
 SCALE_X = 20
 SCALE_Y = 20

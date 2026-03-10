@@ -8,7 +8,7 @@ PC_IP = "192.168.1.179"
 PORT = 5005
 
 bus = smbus.SMBus(1)
-
+sens=3000
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # wake up MPU6050
@@ -59,8 +59,8 @@ while True:
     gx -= offset_x
     gy -= offset_y
 
-    dx = int(gy / 2000)    #  /a con più a è grande più la sensibilità del mouse è bassa 
-    dy = int(gx / 2000)
+    dx = int(gy / sens)    #  /a con più a è grande più la sensibilità del mouse è bassa 
+    dy = int(gx / sens)
 
     packet = struct.pack("bb", dx, dy)
 

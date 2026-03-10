@@ -1,47 +1,62 @@
+import smbus
 import socket
-import json
+import struct
 import time
-from mpu_reader import MPUReader
 
-# ===== CONFIGURAZIONE =====
-PC_IP = "192.168.1.179"  # Inserisci l'IP del PC
-PC_PORT = 5005            # Porta TCP del server sul PC
-SEND_INTERVAL = 0.001      # Frequenza di invio dati (20 Hz)
+MPU_ADDR = 0x68
+PC_IP = "192.168.1.179"
+PORT = 5005
 
-# ===== INIZIALIZZAZIONE SENSORE =====
-sensor = MPUReader()  # Si calibra automaticamente a riposo
+bus = smbus.SMBus(1)
 
-# ===== CREAZIONE SOCKET TCP =====
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    print(f"Connessione al PC {PC_IP}:{PC_PORT} ...")
-    try:
-        s.connect((PC_IP, PC_PORT))
-    except Exception as e:
-        print("Impossibile connettersi al PC:", e)
-        exit(1)
-    print("Connesso! Invio dati MPU...")
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    try:
-        while True:
-            # Legge dati filtrati dal sensore
-            data = sensor.read_filtered()
+# wake up MPU6050
+bus.write_byte_data(MPU_ADDR, 0x6B, 0)
 
-            # Prepara payload JSON compatibile con il server
-            payload = {"dx": data["dx"], "dy": -data["dy"]}
+print("Calibrazione...")
 
-            # Invia al server TCP, aggiunge newline come separatore
-            try:
-                s.sendall((json.dumps(payload) + "\n").encode())
-            except Exception as e:
-                print("Errore invio dati:", e)
-                break
+offset_x = 0
+offset_y = 0
+samples = 200
 
-            time.sleep(SEND_INTERVAL)
+for _ in range(samples):
+    data = bus.read_i2c_block_data(MPU_ADDR, 0x43, 4)
 
-    except KeyboardInterrupt:
-        print("Chiusura in corso...")
+    gx = (data[0] << 8) | data[1]
+    gy = (data[2] << 8) | data[3]
 
-    except Exception as e:
-        print("Errore imprevisto:", e)
+    if gx > 32767: gx -= 65536
+    if gy > 32767: gy -= 65536
 
-print("Programma terminato.")
+    offset_x += gx
+    offset_y += gy
+
+    time.sleep(0.002)
+
+offset_x /= samples
+offset_y /= samples
+
+print("Offset:", offset_x, offset_y)
+
+print("Invio dati...")
+
+while True:
+
+    data = bus.read_i2c_block_data(MPU_ADDR, 0x43, 4)
+
+    gx = (data[0] << 8) | data[1]
+    gy = (data[2] << 8) | data[3]
+
+    if gx > 32767: gx -= 65536
+    if gy > 32767: gy -= 65536
+
+    gx -= offset_x
+    gy -= offset_y
+
+    dx = int(gy / 500)
+    dy = int(gx / 500)
+
+    packet = struct.pack("bb", dx, dy)
+
+    sock.sendto(packet, (PC_IP, PORT))

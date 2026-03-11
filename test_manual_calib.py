@@ -1,48 +1,58 @@
-# test_manual_calib.py
+# test_manual_calib_i2c.py
+import smbus2
 import time
-from mpu_reader import MPUReader
 
-# ----------------- CONFIGURAZIONE MANUALE -----------------
+# ---------------- CONFIG ----------------
+I2C_ADDR = 0x68   # Indirizzo MPU6050
+bus = smbus2.SMBus(1)
+
+REG_PWR_MGMT_1   = 0x6B
+REG_ACCEL_XOUT_H = 0x3B
+
 map_axis = {
-    'X': 0,  # 0 = primo valore restituito da read_filtered
-    'Y': 1   # 1 = secondo valore restituito da read_filtered
+    'X': 0,  # 0=Asse X
+    'Y': 1   # 1=Asse Y
 }
+sign = {'X': 1, 'Y': 1}  # Inverti se serve
 
-sign = {
-    'X': 1,  # invertire direzione X se necessario
-    'Y': 1   # invertire direzione Y se necessario
-}
-# ----------------------------------------------------------
+# ---------------- FUNZIONI ----------------
+def write_reg(reg, val):
+    bus.write_byte_data(I2C_ADDR, reg, val)
 
-# Inizializza MPU
-mpu = MPUReader(alpha=0.95, deadzone=0.0, max_delta=50)
+def read_raw_accel():
+    data = bus.read_i2c_block_data(I2C_ADDR, REG_ACCEL_XOUT_H, 6)
+    ax = (data[0] << 8) | data[1]
+    ay = (data[2] << 8) | data[3]
+    az = (data[4] << 8) | data[5]
+    # correzione segno (16bit signed)
+    ax = ax - 65536 if ax > 32767 else ax
+    ay = ay - 65536 if ay > 32767 else ay
+    az = az - 65536 if az > 32767 else az
+    return ax, ay, az
 
-# Leggi valori di riposo (fermo)
-samples = [mpu.read_filtered(dt=None, samples=1) for _ in range(10)]
-# Supporta sia dizionario sia tupla/lista
-x_rest = sum(s[map_axis['X']] if isinstance(s, (list, tuple)) else s.get('x', 0) for s in samples)/len(samples)
-y_rest = sum(s[map_axis['Y']] if isinstance(s, (list, tuple)) else s.get('y', 0) for s in samples)/len(samples)
+# ---------------- INIT MPU ----------------
+write_reg(REG_PWR_MGMT_1, 0)  # sveglia MPU6050
 
-print("Valori di riposo registrati:")
-print(f"x={x_rest:.2f}, y={y_rest:.2f}")
-print("Muovi il sensore e osserva le variazioni...")
-print("Premi Ctrl+C per uscire.\n")
+# ---------------- CALIBRAZIONE FERMO ----------------
+print("Mantieni il sensore fermo e piatto...")
+time.sleep(2)
+samples = [read_raw_accel() for _ in range(20)]
+x_rest = sum(s[map_axis['X']] for s in samples)/len(samples)
+y_rest = sum(s[map_axis['Y']] for s in samples)/len(samples)
+print(f"Riposo: x={x_rest:.2f}, y={y_rest:.2f}\n")
 
+# ---------------- LOOP PRINCIPALE ----------------
 try:
     while True:
-        sample = mpu.read_filtered(dt=None, samples=1)
-        # Leggi dx/dy in modo compatibile
-        dx = (sample[map_axis['X']] if isinstance(sample, (list, tuple)) else sample.get('x',0)) - x_rest
-        dy = (sample[map_axis['Y']] if isinstance(sample, (list, tuple)) else sample.get('y',0)) - y_rest
-
-        dx *= sign['X']
-        dy *= sign['Y']
+        ax, ay, az = read_raw_accel()
+        dx = (ax - x_rest) * sign['X']
+        dy = (ay - y_rest) * sign['Y']
 
         dir_x = "destra" if dx > 0 else ("sinistra" if dx < 0 else "fermo")
         dir_y = "su" if dy > 0 else ("giù" if dy < 0 else "fermo")
 
-        print(f"dx={dx:+.2f} ({dir_x}) | dy={dy:+.2f} ({dir_y})")
-        time.sleep(0.05)
+        print(f"dx={dx:+.0f} ({dir_x}) | dy={dy:+.0f} ({dir_y})")
+        time.sleep(0.1)
 
 except KeyboardInterrupt:
     print("\nTest terminato.")

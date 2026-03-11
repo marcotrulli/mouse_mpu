@@ -11,7 +11,7 @@ PORT = 5005
 
 FPS = 120
 FRAME_TIME = 1.0 / FPS
-SEND_THRESHOLD = 0.3
+SEND_THRESHOLD = 1
 SAMPLES_AVG = 3
 
 # Queue per passare i campioni dal reader al sender

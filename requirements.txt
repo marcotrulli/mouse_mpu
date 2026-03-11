@@ -1,3 +1,5 @@
 bleak
 mpu6050-raspberrypi
 pynput
+matplotlib
+smbus2

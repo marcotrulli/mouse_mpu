@@ -10,8 +10,8 @@ REG_PWR_MGMT_1   = 0x6B
 REG_ACCEL_XOUT_H = 0x3B
 
 map_axis = {
-    'X': 0,  # 0=Asse X
-    'Y': 1   # 1=Asse Y
+    'X': 1,  # 0=Asse X
+    'Y': 0   # 1=Asse Y
 }
 sign = {'X': 1, 'Y': 1}  # Inverti se serve
 

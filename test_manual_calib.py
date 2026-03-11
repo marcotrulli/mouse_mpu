@@ -1,59 +1,45 @@
-# manual_axis_test.py
-import smbus2
+from mpu6050 import mpu6050
 import time
 
-# Configurazione MPU6050
-MPU_ADDR = 0x68
-PWR_MGMT_1 = 0x6B
-ACCEL_XOUT_H = 0x3B
+# Inizializza il sensore
+mpu = mpu6050(0x68)
 
-bus = smbus2.SMBus(1)
-bus.write_byte_data(MPU_ADDR, PWR_MGMT_1, 0)  # sveglia MPU
+def read_axis(axis):
+    """Legge il valore accelerometro dell'asse scelto."""
+    accel = mpu.get_accel_data()
+    return accel[axis]
 
-def read_accel():
-    data = bus.read_i2c_block_data(MPU_ADDR, ACCEL_XOUT_H, 6)
-    x = (data[0] << 8 | data[1])
-    y = (data[2] << 8 | data[3])
-    z = (data[4] << 8 | data[5])
-    # Converti da 2's complement
-    x = x - 65536 if x > 32767 else x
-    y = y - 65536 if y > 32767 else y
-    z = z - 65536 if z > 32767 else z
-    return x, y, z
+def manual_calibrate():
+    axes = ['x', 'y', 'z']
+    mapping = {}
+    signs = {}
 
-# Chiedi quale asse vuoi testare
-axis = input("Quale asse vuoi testare? (X/Y/Z): ").upper()
-if axis not in ['X', 'Y', 'Z']:
-    print("Asse non valido!")
-    exit(1)
+    print("Manual Calibration of MPU6050\n")
+    print("Ruota il sensore come desideri e premi INVIO per catturare i valori.")
 
-# Leggi valori a riposo
-x0, y0, z0 = read_accel()
-print(f"Valori a riposo: X={x0}, Y={y0}, Z={z0}")
-print("Muovi l'asse selezionato. Premi INVIO per fermare.")
+    for axis in axes:
+        input(f"\nPremi INVIO per iniziare a leggere l'asse {axis.upper()}...")
+        print(f"Muovi solo questo asse e osserva i valori.")
+        
+        values = []
+        try:
+            while True:
+                val = read_axis(axis)
+                print(f"{axis.upper()} = {val:.3f}", end='\r')
+                values.append(val)
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            # Interruzione con Ctrl+C per fermare lettura
+            mean_val = sum(values) / len(values)
+            print(f"\nValore medio registrato per {axis.upper()}: {mean_val:.3f}")
+            # Chiedi all'utente il segno corretto
+            sign_input = input("Vuoi invertire il segno? (s/n): ").strip().lower()
+            signs[axis] = -1 if sign_input == 's' else 1
+            mapping[axis] = mean_val * signs[axis]
 
-# Loop finché l’utente non preme INVIO
-try:
-    while True:
-        x, y, z = read_accel()
-        dx = x - x0
-        dy = y - y0
-        dz = z - z0
+    print("\nCalibrazione completata!")
+    print("Mapping finale:", mapping)
+    print("Segni:", signs)
 
-        if axis == 'X':
-            print(f"Delta X = {dx}")
-        elif axis == 'Y':
-            print(f"Delta Y = {dy}")
-        elif axis == 'Z':
-            print(f"Delta Z = {dz}")
-
-        # Controllo se INVIO è premuto senza bloccare
-        import sys, select
-        if select.select([sys.stdin], [], [], 0)[0]:
-            break
-
-        time.sleep(0.1)
-except KeyboardInterrupt:
-    pass
-
-print("Test terminato.")
+if __name__ == "__main__":
+    manual_calibrate()

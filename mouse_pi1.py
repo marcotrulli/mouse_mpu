@@ -14,6 +14,7 @@ FRAME_TIME = 1.0 / FPS
 SEND_THRESHOLD = 0.1
 SAMPLES_AVG = 3
 CALIB_FILE = "calib.json"
+PRINT_DEBUG = True  # True per vedere dx, dy sul terminale
 
 send_queue = Queue(maxsize=256)
 
@@ -29,15 +30,16 @@ def load_calib():
             print("Calibrazione caricata da file.")
             return json.load(f)
     except FileNotFoundError:
-        print(f"Errore: {CALIB_FILE} non trovato! Creane uno con valori di default.")
+        print(f"Errore: {CALIB_FILE} non trovato!")
         exit(1)
 
 def map_to_xy(raw, calib):
     map_axis = calib['mapping']
     sign = calib['sign']
     rest = calib['rest']
-    x = sign['X'] * (raw[map_axis['X']] - rest[map_axis['X']])
-    y = sign['Y'] * (raw[map_axis['Y']] - rest[map_axis['Y']])
+    # Gestione sicura: se manca una chiave, usa 0
+    x = sign['X'] * (raw.get(map_axis['X'], 0) - rest.get(map_axis['X'], 0))
+    y = sign['Y'] * (raw.get(map_axis['Y'], 0) - rest.get(map_axis['Y'], 0))
     return x, y
 
 # =======================
@@ -46,67 +48,73 @@ def map_to_xy(raw, calib):
 def reader_thread(stop_event):
     sample_buffer = []
     while not stop_event.is_set():
-        raw = mpu.read_filtered(dt=None, samples=1)
-        dx, dy = map_to_xy(raw, calib)
-        sample_buffer.append({'dx': dx, 'dy': dy})
+        try:
+            raw = mpu.read_filtered(dt=None, samples=1)
+            dx, dy = map_to_xy(raw, calib)
+            sample_buffer.append({'dx': dx, 'dy': dy})
 
-        if len(sample_buffer) >= SAMPLES_AVG:
-            dx_avg = sum(s['dx'] for s in sample_buffer) / len(sample_buffer)
-            dy_avg = sum(s['dy'] for s in sample_buffer) / len(sample_buffer)
-            sample_buffer.clear()
-            if abs(dx_avg) > SEND_THRESHOLD or abs(dy_avg) > SEND_THRESHOLD:
-                try:
-                    send_queue.put_nowait((dx_avg, dy_avg))
-                except:
-                    pass
-        time.sleep(0.0005)
+            if len(sample_buffer) >= SAMPLES_AVG:
+                dx_avg = sum(s['dx'] for s in sample_buffer) / len(sample_buffer)
+                dy_avg = sum(s['dy'] for s in sample_buffer) / len(sample_buffer)
+                sample_buffer.clear()
+                if abs(dx_avg) > SEND_THRESHOLD or abs(dy_avg) > SEND_THRESHOLD:
+                    try:
+                        send_queue.put_nowait((dx_avg, dy_avg))
+                    except:
+                        pass
+                if PRINT_DEBUG:
+                    print(f"dx={dx_avg:.3f}, dy={dy_avg:.3f}")
+            time.sleep(0.005)  # leggermente più lento per stabilità I2C
+        except OSError as e:
+            print("Errore I2C, retry in 0.05s:", e)
+            time.sleep(0.05)
+        except Exception as e:
+            print("Errore lettura:", e)
+            time.sleep(0.05)
 
 # =======================
 # Thread sender
 # =======================
 def sender_thread(stop_event):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    sock.settimeout(2.0)
-    try:
-        sock.connect((PC_IP, PORT))
-    except Exception as e:
-        print("Connessione fallita:", e)
-        return
-    next_frame = time.perf_counter()
+    sock = None
     while not stop_event.is_set():
-        now = time.perf_counter()
-        if now < next_frame:
-            time.sleep(next_frame - now)
-            continue
-        next_frame += FRAME_TIME
-
-        dx = dy = 0.0
         try:
-            while True:
-                dx, dy = send_queue.get_nowait()
-        except Empty:
-            pass
+            if sock is None:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                sock.settimeout(2.0)
+                sock.connect((PC_IP, PORT))
+                print("Connesso al PC!")
+            next_frame = time.perf_counter()
+            while not stop_event.is_set():
+                now = time.perf_counter()
+                if now < next_frame:
+                    time.sleep(next_frame - now)
+                    continue
+                next_frame += FRAME_TIME
 
-        if abs(dx) > SEND_THRESHOLD or abs(dy) > SEND_THRESHOLD:
-            pkt = struct.pack('<ff', float(dx), float(dy))
-            try:
-                sock.sendall(pkt)
-            except Exception:
+                dx = dy = 0.0
                 try:
-                    sock.close()
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                    sock.connect((PC_IP, PORT))
-                except Exception:
-                    time.sleep(0.1)
-    sock.close()
+                    while True:
+                        dx, dy = send_queue.get_nowait()
+                except Empty:
+                    pass
+
+                if abs(dx) > SEND_THRESHOLD or abs(dy) > SEND_THRESHOLD:
+                    pkt = struct.pack('<ff', float(dx), float(dy))
+                    sock.sendall(pkt)
+        except Exception as e:
+            print("Errore connessione/invio:", e)
+            if sock:
+                sock.close()
+            sock = None
+            time.sleep(0.5)
 
 # =======================
 # Main
 # =======================
 if __name__ == "__main__":
-    calib = load_calib()  # carica il file calib.json già creato
+    calib = load_calib()
 
     stop = threading.Event()
     r = threading.Thread(target=reader_thread, args=(stop,), daemon=True)

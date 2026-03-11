@@ -1,20 +1,36 @@
-from mpu6050 import mpu6050
+# test_roll_pitch.py
 import time
+from mpu6050 import mpu6050
 
-mpu = mpu6050(0x68)
+# Inizializza MPU6050
+sensor = mpu6050(0x68)
 
-axes = ['x', 'y', 'z']
+# Offset del giroscopio (se vuoi calibrare a mano)
+gyro_offset_x = 0
+gyro_offset_y = 0
 
-print("Test manuale assi MPU6050")
-print("Premi CTRL+C per passare al prossimo asse\n")
+# Fattore di scala per velocità cursore (modificabile)
+scale_x = 1.0  # pitch → su/giù
+scale_y = 1.0  # roll → destra/sinistra
 
-for axis in axes:
-    input(f"Premi INVIO per leggere l'asse {axis.upper()}")
-    print(f"Muovi solo questo asse... Ctrl+C per fermare")
-    try:
-        while True:
-            val = mpu.get_accel_data()[axis]
-            print(f"{axis.upper()} = {val:.3f}", end='\r')
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        print(f"\nFine lettura asse {axis.upper()}\n")
+print("Muovi la mano per testare il movimento (CTRL+C per uscire)...")
+time.sleep(2)
+
+try:
+    while True:
+        accel_data = sensor.get_accel_data()
+        gyro_data = sensor.get_gyro_data()
+
+        # Calcola angoli base da accelerometro (approssimazione)
+        pitch = accel_data['x']  # Pitch → asse X → su/giù
+        roll  = accel_data['y']  # Roll  → asse Y → destra/sinistra
+
+        # Applica offset e scala
+        dx = (roll - gyro_offset_y) * scale_y
+        dy = (pitch - gyro_offset_x) * scale_x
+
+        print(f"dx (destra/sinistra) = {dx:.2f}, dy (su/giù) = {dy:.2f}", end='\r')
+        time.sleep(0.05)
+
+except KeyboardInterrupt:
+    print("\nTest terminato.")
